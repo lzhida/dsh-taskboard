@@ -10,7 +10,7 @@ import type { SessionArchiveResult } from '../shared/api.ts'
  */
 import type { AttachmentUpload, ChangeEvent, DiagnosticsResponse, QueueClearResponse, QueueSummary, DiffResponse, ImportCommitResponse, ImportPreviewResponse, MergeRepoResult, PromptCompletionsResponse, StorageStatus, TaskTemplate, TaskTemplateSpec, UpdateTaskBody, WorkspaceView } from '../shared/api.ts'
 import type { ChecklistItem, TaskLedger, TaskRecord, Urgency } from '../shared/protocol.ts'
-import { emptyLedger } from '../shared/protocol.ts'
+import { completeArchivePromptOf, completeArchiveSessionsOf, emptyLedger } from '../shared/protocol.ts'
 import type { TaskboardClient } from './api.ts'
 import type { SessionJumpResult } from './session-jump.ts'
 import { translate } from './i18n/runtime.ts'
@@ -548,18 +548,35 @@ export class BoardController {
   }
 
   /** Move a task (user surface: done allowed). */
-  async move(id: string, ifVersion: number, status: string, options?: { archiveSessions?: boolean }): Promise<void> {
+  async move(id: string, ifVersion: number, status: string, options?: { archiveSessions?: boolean; thenArchive?: boolean }): Promise<void> {
     try {
       const result = await this.client.move(id, {
         ifVersion,
         status,
         ...(options?.archiveSessions !== undefined ? { archiveSessions: options.archiveSessions } : {}),
+        ...(options?.thenArchive === true ? { thenArchive: true } : {}),
       })
       if (result.sessionArchive !== undefined) this.setState({ sessionArchive: { taskId: id, result: result.sessionArchive } })
       await this.refresh()
     } catch (error) {
       this.setState({ error: error instanceof Error ? error.message : String(error) })
     }
+  }
+
+  /**
+   * Move a task to 'done' AND, when requested, immediately archive it (and
+   * its execution sessions when the host supports it) in a single host
+   * call. Used by the ✓ Done entry on the card and the detail page when the
+   * user has the "Archive on complete" board setting on.
+   *
+   * Server-side atomicity avoids a version_conflict between the two moves
+   * (a stale ifVersion would lose the second step silently). The optional
+   * `archiveSessions` is forced on when the host capability is exposed; the
+   * GUI already filtered the decision in {@link decideCompleteAction}.
+   */
+  async completeAndMaybeArchive(id: string, ifVersion: number, decision: 'archive' | 'done'): Promise<void> {
+    const wantArchive = decision === 'archive'
+    await this.move(id, ifVersion, 'done', wantArchive ? { thenArchive: true, archiveSessions: this.state.archiveSessionsSupported === true } : {})
   }
 
   /**

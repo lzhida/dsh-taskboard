@@ -21,6 +21,8 @@ import {
   defaultIsolationOf,
   defaultPermissionOf,
   defaultSyncExternalSessionsOf,
+  completeArchiveSessionsOf,
+  completeArchivePromptOf,
   dispatchIntervalMsOf,
   completedDisplayLimitOf,
   DEFAULT_COMPLETED_DISPLAY_LIMIT,
@@ -313,7 +315,7 @@ describe('board settings & default isolation (0.5.0)', () => {
   })
 
   it('asBoardSettings sanitizes; defaultIsolationOf, defaultSyncExternalSessionsOf, and defaultPermissionOf resolve setting → factory', () => {
-    expect(asBoardSettings({ defaultIsolation: 'worktree', syncExternalSessions: true, defaultPermission: 'read-only', maxConcurrent: 8, scheduleMissedAfterMinutes: 15, queueMaxAgeMinutes: 60, dispatchIntervalMs: 1_500, completedDisplayLimit: 80, junk: 1 })).toEqual({ defaultIsolation: 'worktree', syncExternalSessions: true, defaultPermission: 'read-only', maxConcurrent: 8, scheduleMissedAfterMinutes: 15, queueMaxAgeMinutes: 60, dispatchIntervalMs: 1_500, completedDisplayLimit: 80 })
+    expect(asBoardSettings({ defaultIsolation: 'worktree', syncExternalSessions: true, defaultPermission: 'read-only', maxConcurrent: 8, scheduleMissedAfterMinutes: 15, queueMaxAgeMinutes: 60, dispatchIntervalMs: 1_500, completedDisplayLimit: 80, completeArchiveSessions: true, completeArchivePrompt: false, junk: 1 })).toEqual({ defaultIsolation: 'worktree', syncExternalSessions: true, defaultPermission: 'read-only', maxConcurrent: 8, scheduleMissedAfterMinutes: 15, queueMaxAgeMinutes: 60, dispatchIntervalMs: 1_500, completedDisplayLimit: 80, completeArchiveSessions: true, completeArchivePrompt: false })
     expect(asBoardSettings({ syncExternalSessions: false })).toEqual({ syncExternalSessions: false })
     expect(asBoardSettings({ defaultPermission: 'fullAccess' })).toEqual({ defaultPermission: 'danger-full-access' })
     expect(asBoardSettings({})).toEqual({})
@@ -331,6 +333,8 @@ describe('board settings & default isolation (0.5.0)', () => {
     expect(() => asBoardSettings({ completedDisplayLimit: 501 })).toThrow('completedDisplayLimit')
     expect(() => asBoardSettings({ completedDisplayLimit: 50.5 })).toThrow('completedDisplayLimit')
     expect(() => asBoardSettings({ completedDisplayLimit: '50' })).toThrow('completedDisplayLimit')
+    expect(() => asBoardSettings({ completeArchiveSessions: 'yes' })).toThrow('completeArchiveSessions must be a boolean')
+    expect(() => asBoardSettings({ completeArchivePrompt: 1 })).toThrow('completeArchivePrompt must be a boolean')
     expect(() => asBoardSettings(null)).toThrow('object')
     expect(DEFAULT_COMPLETED_DISPLAY_LIMIT).toBe(50)
     expect(MIN_COMPLETED_DISPLAY_LIMIT).toBe(10)
@@ -345,6 +349,18 @@ describe('board settings & default isolation (0.5.0)', () => {
     expect(defaultSyncExternalSessionsOf({})).toBe(false)
     expect(defaultSyncExternalSessionsOf({ syncExternalSessions: true })).toBe(true)
     expect(defaultSyncExternalSessionsOf({ syncExternalSessions: false })).toBe(false)
+    // 0.9.x — "archive on ✓ Done" + "prompt before archive" (independent switches)
+    expect(completeArchiveSessionsOf(undefined)).toBe(false)
+    expect(completeArchiveSessionsOf({})).toBe(false)
+    expect(completeArchiveSessionsOf({ completeArchiveSessions: true })).toBe(true)
+    expect(completeArchiveSessionsOf({ completeArchiveSessions: false })).toBe(false)
+    expect(completeArchivePromptOf(undefined)).toBe(true)
+    expect(completeArchivePromptOf({})).toBe(true)
+    expect(completeArchivePromptOf({ completeArchivePrompt: false })).toBe(false)
+    expect(completeArchivePromptOf({ completeArchivePrompt: true })).toBe(true)
+    // the two switches are independent (turning archive ON does not force prompt OFF)
+    expect(completeArchiveSessionsOf({ completeArchiveSessions: true, completeArchivePrompt: false })).toBe(true)
+    expect(completeArchivePromptOf({ completeArchiveSessions: true, completeArchivePrompt: false })).toBe(false)
     expect(DEFAULT_PERMISSION).toBe('workspace-write')
     expect(ALL_PERMISSIONS).toEqual(['workspace-write', 'read-only', 'danger-full-access'])
     expect(defaultPermissionOf(undefined)).toBe('workspace-write')

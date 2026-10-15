@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react'
 import type { BoardController } from '../controller.ts'
 import type { CatalogModelItem, CatalogPresetItem } from '../../shared/api.ts'
-import { DEFAULT_COMPLETED_DISPLAY_LIMIT, DEFAULT_DISPATCH_INTERVAL_MS, DEFAULT_ISOLATION, DEFAULT_MAX_CONCURRENT, DEFAULT_QUEUE_MAX_AGE_MINUTES, DEFAULT_SCHEDULE_MISSED_AFTER_MINUTES, MIN_COMPLETED_DISPLAY_LIMIT, MAX_COMPLETED_DISPLAY_LIMIT, completedDisplayLimitOf, defaultPermissionOf, defaultSyncExternalSessionsOf, dispatchIntervalMsOf, maxConcurrentOf, queueMaxAgeMinutesOf, scheduleMissedAfterMinutesOf, type IsolationMode, type PermissionMode } from '../../shared/protocol.ts'
+import { DEFAULT_COMPLETED_DISPLAY_LIMIT, DEFAULT_DISPATCH_INTERVAL_MS, DEFAULT_ISOLATION, DEFAULT_MAX_CONCURRENT, DEFAULT_QUEUE_MAX_AGE_MINUTES, DEFAULT_SCHEDULE_MISSED_AFTER_MINUTES, DEFAULT_COMPLETE_ARCHIVE_PROMPT, DEFAULT_COMPLETE_ARCHIVE_SESSIONS, MIN_COMPLETED_DISPLAY_LIMIT, MAX_COMPLETED_DISPLAY_LIMIT, completeArchivePromptOf, completeArchiveSessionsOf, completedDisplayLimitOf, defaultPermissionOf, defaultSyncExternalSessionsOf, dispatchIntervalMsOf, maxConcurrentOf, queueMaxAgeMinutesOf, scheduleMissedAfterMinutesOf, type IsolationMode, type PermissionMode } from '../../shared/protocol.ts'
 import { useT, type Translate } from '../i18n/runtime.ts'
 
 /** The isolation options with one-line hints (mirrors the task form; translated per render). */
@@ -28,6 +28,8 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
   const state = controller.getSnapshot()
   const currentIso = state.ledger.settings?.defaultIsolation ?? DEFAULT_ISOLATION
   const currentSync = defaultSyncExternalSessionsOf(state.ledger.settings)
+  const currentCompleteArchive = completeArchiveSessionsOf(state.ledger.settings)
+  const currentCompleteArchivePrompt = completeArchivePromptOf(state.ledger.settings)
   const currentPerm = defaultPermissionOf(state.ledger.settings)
   const currentMaxConcurrent = maxConcurrentOf(state.ledger.settings)
   const currentMissedAfterMinutes = scheduleMissedAfterMinutesOf(state.ledger.settings)
@@ -49,6 +51,8 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
   const reasoning = selectedModel?.reasoning
   const [draftIso, setDraftIso] = useState<IsolationMode>(currentIso)
   const [draftSync, setDraftSync] = useState<boolean>(currentSync)
+  const [draftCompleteArchive, setDraftCompleteArchive] = useState<boolean>(currentCompleteArchive)
+  const [draftCompleteArchivePrompt, setDraftCompleteArchivePrompt] = useState<boolean>(currentCompleteArchivePrompt)
   const [draftPerm, setDraftPerm] = useState<PermissionMode>(currentPerm)
   const [draftMaxConcurrent, setDraftMaxConcurrent] = useState(String(currentMaxConcurrent))
   const [draftMissedAfterMinutes, setDraftMissedAfterMinutes] = useState(String(currentMissedAfterMinutes))
@@ -70,6 +74,7 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
   const completedLimitValid = Number.isSafeInteger(completedLimit) && completedLimit >= MIN_COMPLETED_DISPLAY_LIMIT && completedLimit <= MAX_COMPLETED_DISPLAY_LIMIT
   const dirty = draftModel !== currentModelKey || draftEffort !== currentEffort || draftPreset !== currentPreset
     || draftIso !== currentIso || draftSync !== currentSync || draftPerm !== currentPerm
+    || draftCompleteArchive !== currentCompleteArchive || draftCompleteArchivePrompt !== currentCompleteArchivePrompt
     || draftMaxConcurrent !== String(currentMaxConcurrent) || draftMissedAfterMinutes !== String(currentMissedAfterMinutes)
     || draftQueueMaxAgeMinutes !== String(currentQueueMaxAgeMinutes) || draftDispatchIntervalMs !== String(currentDispatchIntervalMs)
     || draftCompletedLimit !== String(currentCompletedLimit)
@@ -101,6 +106,8 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
       queueMaxAgeMinutes,
       dispatchIntervalMs,
       completedDisplayLimit: completedLimit,
+      completeArchiveSessions: draftCompleteArchive,
+      completeArchivePrompt: draftCompleteArchivePrompt,
     }).then(ok => {
       if (ok) controller.closeSettings()
     })
@@ -169,6 +176,72 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
               {currentSync
                 ? t('set.sync.stateOn')
                 : t('set.sync.stateOff')}
+            </span>
+          </section>
+
+          <section className="dsh-atb-diag-sec">
+            <h4>{t('set.completeArchive.heading')}</h4>
+            <p className="dsh-atb-isolation-note">{t('set.completeArchive.hint')}</p>
+            <div className="dsh-atb-mode-picker">
+              <button
+                type="button"
+                className="dsh-atb-mode-opt"
+                data-on={!draftCompleteArchive}
+                title={t('set.completeArchive.off.title')}
+                onClick={() => setDraftCompleteArchive(false)}
+              >
+                <span className="dsh-atb-mode-name">{t('set.completeArchive.off.name')}</span>
+                <span className="dsh-atb-mode-hint">{t('set.completeArchive.off.hint')}</span>
+              </button>
+              <button
+                type="button"
+                className="dsh-atb-mode-opt"
+                data-on={draftCompleteArchive}
+                title={t('set.completeArchive.on.title')}
+                onClick={() => setDraftCompleteArchive(true)}
+              >
+                <span className="dsh-atb-mode-name">{t('set.completeArchive.on.name')}</span>
+                <span className="dsh-atb-mode-hint">{t('set.completeArchive.on.hint')}</span>
+              </button>
+            </div>
+            <span className="dsh-atb-isolation-note">
+              {currentCompleteArchive
+                ? t('set.completeArchive.stateOn')
+                : t('set.completeArchive.stateOff')}
+            </span>
+          </section>
+
+          <section className="dsh-atb-diag-sec" data-disabled={!draftCompleteArchive}>
+            <h4>{t('set.completeArchivePrompt.heading')}</h4>
+            <p className="dsh-atb-isolation-note">{t('set.completeArchivePrompt.hint')}</p>
+            <div className="dsh-atb-mode-picker">
+              <button
+                type="button"
+                className="dsh-atb-mode-opt"
+                data-on={!draftCompleteArchivePrompt}
+                title={t('set.completeArchivePrompt.off.title')}
+                disabled={!draftCompleteArchive}
+                onClick={() => setDraftCompleteArchivePrompt(false)}
+              >
+                <span className="dsh-atb-mode-name">{t('set.completeArchivePrompt.off.name')}</span>
+                <span className="dsh-atb-mode-hint">{t('set.completeArchivePrompt.off.hint')}</span>
+              </button>
+              <button
+                type="button"
+                className="dsh-atb-mode-opt"
+                data-on={draftCompleteArchivePrompt}
+                title={t('set.completeArchivePrompt.on.title')}
+                disabled={!draftCompleteArchive}
+                onClick={() => setDraftCompleteArchivePrompt(true)}
+              >
+                <span className="dsh-atb-mode-name">{t('set.completeArchivePrompt.on.name')}</span>
+                <span className="dsh-atb-mode-hint">{t('set.completeArchivePrompt.on.hint')}</span>
+              </button>
+            </div>
+            <span className="dsh-atb-isolation-note">
+              {currentCompleteArchivePrompt
+                ? t('set.completeArchivePrompt.stateOn')
+                : t('set.completeArchivePrompt.stateOff')}
             </span>
           </section>
 

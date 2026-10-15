@@ -17,6 +17,8 @@ import type { TaskRecord } from '../../shared/protocol.ts'
 import { fmtTime, isStaleClaim } from './format.ts'
 import { OUTCOME_KEYS, URGENCY_KEYS } from './labels.ts'
 import { useT } from '../i18n/runtime.ts'
+import { resolveCompleteAction, type CompleteAction } from './complete-action.ts'
+import { useConfirm } from './AlertModal.tsx'
 
 /** dataTransfer type carrying the dragged task id. */
 export const DRAG_TYPE = 'application/x-dsh-atb-task'
@@ -60,6 +62,13 @@ export function TaskCard({ task, controller, draggable = false, now, onAlert }: 
   const targetSessionId = resolveTaskSessionId(task)
   const sessionTitle = controller.getSessionTitle(targetSessionId)
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const snapshot = controller.getSnapshot()
+  const completeAction: CompleteAction = resolveCompleteAction({
+    settings: snapshot.ledger.settings,
+    archiveSessionsSupported: snapshot.archiveSessionsSupported === true,
+  })
+  const willArchiveOnComplete = completeAction.kind !== 'done-only'
+  const { confirm: confirmComplete, el: confirmCompleteEl } = useConfirm()
 
   useEffect(() => {
     return () => {
@@ -76,6 +85,43 @@ export function TaskCard({ task, controller, draggable = false, now, onAlert }: 
       if (ok) { setRejectOpen(false); setNote('') }
       // On failure the error surface explains; the form stays open for retry.
     })
+  }
+
+  /**
+   * ✓ Done entry point: resolves the action through the board settings, then
+   * either runs immediately, shows a Yes/No/Cancel prompt, or just moves to
+   * 'done'. The action snapshot is captured at click time so a later SSE
+   * frame cannot flip a "no prompt" to "prompt" mid-decision.
+   */
+  const handleComplete = (): void => {
+    const action = completeAction
+    if (action.kind === 'done-only') {
+      void controller.move(task.id, task.version, 'done')
+      return
+    }
+    if (action.kind === 'archive-immediately') {
+      void controller.completeAndMaybeArchive(task.id, task.version, 'archive')
+      return
+    }
+    // action.kind === 'prompt'
+    void (async () => {
+      const verdict = await confirmComplete({
+        title: t('card.confirmDoneAndArchive.title'),
+        body: t('card.confirmDoneAndArchive.body'),
+        yesText: action.withSessions
+          ? t('detail.move.confirmDoneAndArchive.yes')
+          : t('detail.move.confirmDoneAndArchive.yesCardOnly'),
+        noText: t('detail.move.confirmDoneAndArchive.no'),
+        cancelText: t('detail.move.confirmDoneAndArchive.cancel'),
+        yesDanger: false,
+      })
+      if (verdict === 'cancel') return
+      if (verdict === 'yes') {
+        await controller.completeAndMaybeArchive(task.id, task.version, 'archive')
+      } else {
+        await controller.move(task.id, task.version, 'done')
+      }
+    })()
   }
 
   /** Single-click handler: debounce when a target session exists so double-click won't open details if closed. */
@@ -259,8 +305,8 @@ export function TaskCard({ task, controller, draggable = false, now, onAlert }: 
                 type="button"
                 className="dsh-atb-quickbtn"
                 data-act="done"
-                title={t('card.action.doneTitle')}
-                onClick={() => void controller.move(task.id, task.version, 'done')}
+                title={willArchiveOnComplete ? t('card.action.doneAndArchiveTitle') : t('card.action.doneTitle')}
+                onClick={handleComplete}
               >
                 {t('card.action.done')}
               </button>
@@ -275,6 +321,7 @@ export function TaskCard({ task, controller, draggable = false, now, onAlert }: 
               </button>
             </div>
           ))}
+      {confirmCompleteEl}
     </div>
   )
 }

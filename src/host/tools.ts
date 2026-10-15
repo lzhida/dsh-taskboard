@@ -590,6 +590,7 @@ export function registerTaskboardTools(ctx: ToolContextFace, deps: ToolDeps): Ar
       status: { type: 'string', required: true, description: 'Target status.' },
       ifVersion: { type: 'number', required: true, description: 'Task version you read; fails on mismatch.' },
       archiveSessions: { type: 'boolean', description: 'When moving to archived: whether to archive associated execution sessions as well. Defaults to false.' },
+      thenArchive: { type: 'boolean', description: "GUI-only chain: when status is 'done', also move to 'archived' in the same call. Backed by the 'archive on complete' board setting." },
     },
     output: {
       schema: JSON_OUT,
@@ -599,7 +600,7 @@ export function registerTaskboardTools(ctx: ToolContextFace, deps: ToolDeps): Ar
         return [{ type: 'text', text: t === undefined ? '移动失败。' : `任务 ${t.id} 已移到 ${t.status}，当前 v${t.version}。${v.sessionArchive === undefined ? '' : ` 会话归档结果：${JSON.stringify(v.sessionArchive)}`}` }]
       },
     },
-    async execute(args: { id: string; status: string; ifVersion: number; archiveSessions?: boolean }, exec: unknown) {
+    async execute(args: { id: string; status: string; ifVersion: number; archiveSessions?: boolean; thenArchive?: boolean }, exec: unknown) {
       try {
         const { actor } = caller(exec as ToolRunContext)
         const to = asStatus(args.status)
@@ -645,6 +646,25 @@ export function registerTaskboardTools(ctx: ToolContextFace, deps: ToolDeps): Ar
           ledger.tasks[index] = next
           return [next]
         })
+        // Chain: agent path is conservative — thenArchive is a GUI flow.
+        // Kept here for parity with the route so future automated flows don't
+        // re-derive the second move; the agent-facing tool description still
+        // forbids `to === 'done'` above, so the chain only fires when an
+        // upstream surface (the route) lets the request through.
+        if (args.thenArchive === true && to === 'archived' && next !== undefined) {
+          await store.mutate('task-moved', ledger => {
+            const { index, task } = liveTaskAt(ledger, args.id)
+            if (!canTransition(task.status, 'archived')) return []
+            task.status = 'archived'
+            task.version += 1
+            task.updatedAt = deps.now()
+            task.updatedBy = actor
+            syncClaim(task, 'archived', deps.now())
+            ledger.tasks[index] = task
+            next = task
+            return [task]
+          })
+        }
         const sessionArchive = to === 'archived' && args.archiveSessions === true
           ? await archiveTaskSessions(beforeTask ?? next!, deps.workspaces.archiveSession)
           : undefined

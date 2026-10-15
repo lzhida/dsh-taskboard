@@ -11,7 +11,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { BoardController } from '../controller.ts'
 import type { CommentRecord, ExecutionRecord, TaskRecord } from '../../shared/protocol.ts'
 import { canTransition, checklistProgress, taskAssociatedSessionIds } from '../../shared/protocol.ts'
-import { useAlert } from './AlertModal.tsx'
+import { useAlert, useConfirm } from './AlertModal.tsx'
+import { resolveCompleteAction } from './complete-action.ts'
 import { fmtTime, isStaleClaim } from './format.ts'
 import { MOVE_KEYS, OUTCOME_KEYS, STATUS_KEYS, URGENCY_KEYS } from './labels.ts'
 import { useT, type Translate } from '../i18n/runtime.ts'
@@ -527,10 +528,16 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
   // copies while the first round-trip was still pending (review P0).
   const [actionBusy, setActionBusy] = useState(false)
   const { alert: showAlert, el: alertEl } = useAlert()
+  const { confirm: confirmComplete, el: confirmCompleteEl } = useConfirm()
   const ws = controller.getSnapshot().workspaces.find(w => w.id === task.workspaceId)
   const canRun = task.status !== 'in_progress' && task.status !== 'done' && task.status !== 'archived'
   const runningExecution = task.executions.find(e => e.outcome === 'running')
   const holder = task.status === 'in_progress' ? task.claimedBy : undefined
+  // ✓ Done action resolution (0.9.x): the same action drives the card and the
+  // detail page; the resolveCompleteAction helper is the single source of truth.
+  const boardSettings = controller.getSnapshot().ledger.settings
+  const archiveSupported = controller.getSnapshot().archiveSessionsSupported === true
+  const completeAction = resolveCompleteAction({ settings: boardSettings, archiveSessionsSupported: archiveSupported })
   const stale = now !== undefined && isStaleClaim(task, now)
   const unchecked = (task.checklist ?? []).filter(i => !i.checked).length
   const sessionExecution = [...task.executions].reverse().find(e => e.sessionId !== undefined)
@@ -759,13 +766,54 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
         <div className="dsh-atb-movebtns">
           {moveTargets(task).map(to => {
             if (to === 'done') {
+              // ✓ Done entry (0.9.x): with the prompt action we go straight to
+              // the Yes/No/Cancel modal (no local confirm span). Without the
+              // prompt, the local confirm span still surfaces the
+              // "checklist-unchecked" warning that pre-existed this feature.
+              if (completeAction.kind === 'prompt') {
+                return (
+                  <button
+                    key={to}
+                    type="button"
+                    className="dsh-atb-movebtn"
+                    data-to={to}
+                    onClick={() => { setConfirmArchive(false); void (async () => {
+                      const verdict = await confirmComplete({
+                        title: t('card.confirmDoneAndArchive.title'),
+                        body: t('card.confirmDoneAndArchive.body'),
+                        yesText: completeAction.withSessions
+                          ? t('detail.move.confirmDoneAndArchive.yes')
+                          : t('detail.move.confirmDoneAndArchive.yesCardOnly'),
+                        noText: t('detail.move.confirmDoneAndArchive.no'),
+                        cancelText: t('detail.move.confirmDoneAndArchive.cancel'),
+                      })
+                      if (verdict === 'cancel') return
+                      if (verdict === 'yes') {
+                        await controller.completeAndMaybeArchive(task.id, task.version, 'archive')
+                      } else {
+                        await controller.move(task.id, task.version, 'done')
+                      }
+                    })() }}
+                  >
+                    {t('detail.move.to', { status: t(MOVE_KEYS[to]) })}
+                  </button>
+                )
+              }
+              const onClickDone = (): void => {
+                if (completeAction.kind === 'done-only') {
+                  void controller.move(task.id, task.version, 'done')
+                  return
+                }
+                // archive-immediately: skip the local confirm and chain.
+                void controller.completeAndMaybeArchive(task.id, task.version, 'archive')
+              }
               return confirmDone
                 ? (
                     <span key={to} className="dsh-atb-confirm">
                       <span className="dsh-atb-confirm-label" data-tone={unchecked > 0 ? 'bad' : undefined}>
                         {unchecked > 0 ? t('detail.move.confirmDoneUnchecked', { n: unchecked }) : t('detail.move.confirmDone')}
                       </span>
-                      <button type="button" className="dsh-atb-btn" data-primary="true" onClick={() => { void controller.move(task.id, task.version, 'done'); setConfirmDone(false) }}>{t('detail.move.confirm')}</button>
+                      <button type="button" className="dsh-atb-btn" data-primary="true" onClick={() => { onClickDone(); setConfirmDone(false) }}>{t('detail.move.confirm')}</button>
                       <button type="button" className="dsh-atb-btn" onClick={() => setConfirmDone(false)}>{t('shared.cancel')}</button>
                     </span>
                   )
@@ -978,6 +1026,7 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
       </div>
 
       {alertEl}
+      {confirmCompleteEl}
     </div>
   )
 }

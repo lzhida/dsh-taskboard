@@ -102,8 +102,17 @@ export type UpdateTaskBody = {
   checklist?: unknown
 }
 
-/** Move-task request body (ifVersion mandatory; the user MAY move to done). */
-export type MoveTaskBody = { ifVersion: number; status: string; archiveSessions?: boolean }
+/**
+ * Move-task request body (ifVersion mandatory; the user MAY move to done).
+ * - `archiveSessions`: when moving to `archived`, whether to also archive the
+ *   task's associated execution sessions.
+ * - `thenArchive`: GUI-only flag — when true AND `status === 'done'`, the
+ *   host chains a second `done → archived` move in the same call. Backed by
+ *   the board setting "archive on complete". Combined with `archiveSessions`
+ *   it archives both the card and its sessions in one round trip, avoiding
+ *   the version_conflict risk of two separate moves.
+ */
+export type MoveTaskBody = { ifVersion: number; status: string; archiveSessions?: boolean; thenArchive?: boolean }
 
 export type SessionArchiveResult = { archived: string[]; failed: Array<{ sessionId: string; error: string }>; unsupported: string[] }
 export type MoveTaskResponse = TaskSummary & { sessionArchive?: SessionArchiveResult }
@@ -252,6 +261,10 @@ export type UpdateSettingsBody = {
   dispatchIntervalMs?: number
   /** Maximum completed (done) tasks displayed on the board; defaults to 50 (10–500). */
   completedDisplayLimit?: number
+  /** Whether the GUI should also archive the task's execution sessions when the user clicks ✓ Done (default: false). */
+  completeArchiveSessions?: boolean
+  /** When {@link UpdateSettingsBody.completeArchiveSessions} is on, whether to prompt the user every time (default: true). */
+  completeArchivePrompt?: boolean
 }
 
 /** Prompt completion item for skills and slash commands (0.5.5). */
