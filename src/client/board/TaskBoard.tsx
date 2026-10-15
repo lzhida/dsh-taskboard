@@ -337,7 +337,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
         </div>
         <a
           className="dsh-atb-ver"
-          href="https://github.com/cloader/dsh-taskboard"
+          href="https://github.com/lzhida/dsh-taskboard"
           target="_blank"
           rel="noopener noreferrer"
         >

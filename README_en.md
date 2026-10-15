@@ -1,5 +1,4 @@
-[![npm version](https://img.shields.io/npm/v/dsh-taskboard.svg)](https://www.npmjs.com/package/dsh-taskboard)
-[![License](https://img.shields.io/npm/l/dsh-taskboard.svg)](https://github.com/cloader/dsh-taskboard/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/lzhida/dsh-taskboard)](https://github.com/lzhida/dsh-taskboard/blob/main/LICENSE)
 
 English | [简体中文](./README.md)
 
@@ -18,9 +17,9 @@ A **task board plugin for DeepSeek Harness**: humans create cards, agents claim 
 
 ## Screenshots
 
-<p align="center"><img src="https://raw.githubusercontent.com/cloader/dsh-taskboard/main/img/board.png" alt="Task board" width="880"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/lzhida/dsh-taskboard/main/img/board.png" alt="Task board" width="880"></p>
 
-<p align="center"><img src="https://raw.githubusercontent.com/cloader/dsh-taskboard/main/img/modal.png" alt="New task dialog" width="440"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/lzhida/dsh-taskboard/main/img/modal.png" alt="New task dialog" width="440"></p>
 
 ## Table of Contents
 
@@ -50,7 +49,7 @@ A **task board plugin for DeepSeek Harness**: humans create cards, agents claim 
 dsh plugin --profile web add dsh-taskboard
 
 # Or install from the GitHub source
-dsh plugin --profile web add github:cloader/dsh-taskboard
+dsh plugin --profile web add github:lzhida/dsh-taskboard
 ```
 
 After installing, **restart `dsh web` and refresh the page**: you should see a "Task Board" entry in the sidebar. No further configuration needed.
@@ -65,7 +64,7 @@ Plugins installed from a git source go through a prepare script, and pnpm blocks
 <summary>Developer-mode install (edit code and see changes immediately)</summary>
 
 ```bash
-git clone https://github.com/cloader/dsh-taskboard.git
+git clone https://github.com/lzhida/dsh-taskboard.git
 cd dsh-taskboard
 npm install && npm run build
 dsh plugin --profile web add "link:/path/to/dsh-taskboard"
@@ -232,7 +231,7 @@ The 0.6.6 fix reserves space below the native caption controls based on the boar
 ## Development
 
 ```bash
-git clone https://github.com/cloader/dsh-taskboard.git
+git clone https://github.com/lzhida/dsh-taskboard.git
 cd dsh-taskboard
 npm install && npm run build    # dual build: host ESM + client CJS
 npm test                        # full vitest suite (including real-git mirror integration tests)

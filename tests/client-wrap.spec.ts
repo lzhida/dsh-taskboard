@@ -12,7 +12,7 @@ describe('shipped client wrapper', () => {
     runInNewContext(wrapped, { window: { __ModuleLoader__: { load } } })
     expect(load).toHaveBeenCalledTimes(1)
     const registration = load.mock.calls[0]![0]
-    expect(registration.id).toBe('dsh-taskboard')
+    expect(registration.id).toBe('@zhidal/dsh-taskboard')
     expect(registration.factory).toBeTypeOf('function')
 
     const sentinel = new Error('host require reached')

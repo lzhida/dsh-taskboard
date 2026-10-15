@@ -1,5 +1,4 @@
-[![npm version](https://img.shields.io/npm/v/dsh-taskboard.svg)](https://www.npmjs.com/package/dsh-taskboard)
-[![License](https://img.shields.io/npm/l/dsh-taskboard.svg)](https://github.com/cloader/dsh-taskboard/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/lzhida/dsh-taskboard)](https://github.com/lzhida/dsh-taskboard/blob/main/LICENSE)
 
 [English](./README_en.md) | 简体中文
 
@@ -18,9 +17,9 @@ DeepSeek Harness 的**任务看板插件**：人建卡、agent 认领执行、�
 
 ## 界面
 
-<p align="center"><img src="https://raw.githubusercontent.com/cloader/dsh-taskboard/main/img/board.png" alt="任务看板" width="880"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/lzhida/dsh-taskboard/main/img/board.png" alt="任务看板" width="880"></p>
 
-<p align="center"><img src="https://raw.githubusercontent.com/cloader/dsh-taskboard/main/img/modal.png" alt="新建任务" width="440"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/lzhida/dsh-taskboard/main/img/modal.png" alt="新建任务" width="440"></p>
 
 ## 目录
 
@@ -52,7 +51,7 @@ DeepSeek Harness 的**任务看板插件**：人建卡、agent 认领执行、�
 dsh plugin --profile web add dsh-taskboard
 
 # 或从 GitHub 源安装
-dsh plugin --profile web add github:cloader/dsh-taskboard
+dsh plugin --profile web add github:lzhida/dsh-taskboard
 ```
 
 安装后**重启 `dsh web` 并刷新页面**：侧边栏出现「任务看板」入口即成功。无需任何后续配置。
@@ -67,7 +66,7 @@ git 源插件安装时经 prepare 脚本构建，pnpm 会先阻止——按报�
 <summary>开发模式安装（改代码即生效）</summary>
 
 ```bash
-git clone https://github.com/cloader/dsh-taskboard.git
+git clone https://github.com/lzhida/dsh-taskboard.git
 cd dsh-taskboard
 npm install && npm run build
 dsh plugin --profile web add "link:/path/to/dsh-taskboard"
@@ -234,7 +233,7 @@ pnpm 的构建授权——按报错把 key 加进 profile 的 `pnpm-workspace.ya
 ## 开发
 
 ```bash
-git clone https://github.com/cloader/dsh-taskboard.git
+git clone https://github.com/lzhida/dsh-taskboard.git
 cd dsh-taskboard
 npm install && npm run build    # host ESM + client CJS 双构建
 npm test                        # vitest 全量（含真实 git 镜像集成测试）

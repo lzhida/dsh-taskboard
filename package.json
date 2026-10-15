@@ -1,5 +1,5 @@
 {
-  "name": "dsh-taskboard",
+  "name": "@zhidal/dsh-taskboard",
   "description": "Agent-first task board for the DSH web GUI: host-authoritative task ledger with taskboard_* agent tools, project (= workspace) claim boundaries, per-task model execution with optional existing-session reuse, optional per-task git-worktree isolation (dedicated task branches, commit evidence, one-click merge), host-side cron scheduling, and a live SSE kanban view. Mounts via the official dsh plugin system — no DSH source changes.",
   "version": "0.8.10",
   "type": "module",
@@ -47,12 +47,12 @@
   "author": "cloader",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cloader/dsh-taskboard.git"
+    "url": "git+https://github.com/lzhida/dsh-taskboard.git"
   },
   "bugs": {
-    "url": "https://github.com/cloader/dsh-taskboard/issues"
+    "url": "https://github.com/lzhida/dsh-taskboard/issues"
   },
-  "homepage": "https://github.com/cloader/dsh-taskboard#readme",
+  "homepage": "https://github.com/lzhida/dsh-taskboard#readme",
   "keywords": [
     "dsh",
     "deepseek-harness",
