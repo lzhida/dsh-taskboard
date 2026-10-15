@@ -5,7 +5,7 @@
  *
  * @module dsh-taskboard/client/board/AlertModal
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useT } from '../i18n/runtime.ts'
 
 /** Show a non-blocking alert modal. Returns true when opened. */
@@ -41,21 +41,20 @@ export interface ConfirmRequest {
 /** Imperative three-button prompt. Resolves with the chosen verdict. */
 export function useConfirm(): { confirm: (req: ConfirmRequest) => Promise<ConfirmVerdict>; el: React.ReactNode } {
   const [req, setReq] = useState<ConfirmRequest | null>(null)
-  const resolverRef = useState<((v: ConfirmVerdict) => void) | null>(null)[0]
-  const setResolver = useState<((v: ConfirmVerdict) => void) | null>(null)[1]
+  // The pending resolver lives in a ref (not state): storing it must not
+  // round-trip a render, and reading it at click time must see the exact
+  // function handed out by the in-flight confirm() promise.
+  const resolverRef = useRef<((v: ConfirmVerdict) => void) | null>(null)
   const close = useCallback((verdict: ConfirmVerdict) => {
-    setReq(current => {
-      if (current === null) return current
-      const r = resolverRef
-      setResolver(null)
-      r?.(verdict)
-      return null
-    })
-  }, [resolverRef, setResolver])
+    const r = resolverRef.current
+    resolverRef.current = null
+    setReq(null)
+    r?.(verdict)
+  }, [])
   const confirm = useCallback((next: ConfirmRequest) => new Promise<ConfirmVerdict>(resolve => {
-    setResolver(() => resolve)
+    resolverRef.current = resolve
     setReq(next)
-  }), [setResolver])
+  }), [])
   const el = req !== null
     ? <ConfirmModal req={req} onClose={close} />
     : null
