@@ -142,6 +142,10 @@ export const MAX_DISPATCH_INTERVAL_MS = 60_000
 export const DEFAULT_COMPLETED_DISPLAY_LIMIT = 50
 export const MIN_COMPLETED_DISPLAY_LIMIT = 10
 export const MAX_COMPLETED_DISPLAY_LIMIT = 500
+/** Factory default for "archive the task's execution sessions when the user clicks ✓ Done". */
+export const DEFAULT_COMPLETE_ARCHIVE_SESSIONS = false
+/** Factory default for "prompt the user before archiving on ✓ Done" (only consulted when {@link DEFAULT_COMPLETE_ARCHIVE_SESSIONS} is on). */
+export const DEFAULT_COMPLETE_ARCHIVE_PROMPT = true
 
 /** Validate an isolation value. */
 export function asIsolation(raw: string): IsolationMode {
@@ -205,6 +209,21 @@ export type BoardSettings = {
   dispatchIntervalMs?: number
   /** Maximum number of completed (done) tasks displayed on the board (default: 50). */
   completedDisplayLimit?: number
+  /**
+   * When the user clicks ✓ Done in the GUI, also archive the task's
+   * associated execution sessions (0.9.x). Default: false — completion is a
+   * status move only; the user can still choose to archive later from the
+   * task detail page.
+   */
+  completeArchiveSessions?: boolean
+  /**
+   * When {@link completeArchiveSessions} is on, whether to prompt the user
+   * every time they click ✓ Done (default: true). When off, the move +
+   * archive happens immediately without confirmation. The session archive
+   * still requires the host to expose `archiveSession` — unsupported hosts
+   * silently fall back to "archive card only" inside the same prompt.
+   */
+  completeArchivePrompt?: boolean
 }
 
 /** Validate raw input into sanitized {@link BoardSettings} (unknown fields dropped). */
@@ -272,6 +291,18 @@ export function asBoardSettings(raw: unknown): BoardSettings {
     }
     out.completedDisplayLimit = e.completedDisplayLimit
   }
+  if (e.completeArchiveSessions !== undefined) {
+    if (typeof e.completeArchiveSessions !== 'boolean') {
+      throw new Error('completeArchiveSessions must be a boolean')
+    }
+    out.completeArchiveSessions = e.completeArchiveSessions
+  }
+  if (e.completeArchivePrompt !== undefined) {
+    if (typeof e.completeArchivePrompt !== 'boolean') {
+      throw new Error('completeArchivePrompt must be a boolean')
+    }
+    out.completeArchivePrompt = e.completeArchivePrompt
+  }
   return out
 }
 
@@ -313,6 +344,24 @@ export function dispatchIntervalMsOf(settings?: BoardSettings): number {
 /** Effective completed tasks display limit (board setting → factory default 50). */
 export function completedDisplayLimitOf(settings?: BoardSettings): number {
   return settings?.completedDisplayLimit ?? DEFAULT_COMPLETED_DISPLAY_LIMIT
+}
+
+/**
+ * Effective "archive execution sessions on ✓ Done" switch
+ * (board setting → factory default {@link DEFAULT_COMPLETE_ARCHIVE_SESSIONS}).
+ */
+export function completeArchiveSessionsOf(settings?: BoardSettings): boolean {
+  return settings?.completeArchiveSessions ?? DEFAULT_COMPLETE_ARCHIVE_SESSIONS
+}
+
+/**
+ * Effective "prompt the user before archiving on ✓ Done" switch
+ * (board setting → factory default {@link DEFAULT_COMPLETE_ARCHIVE_PROMPT}).
+ * Only consulted when {@link completeArchiveSessionsOf} is true; ignored
+ * otherwise (the user never sees the prompt when archiving is off).
+ */
+export function completeArchivePromptOf(settings?: BoardSettings): boolean {
+  return settings?.completeArchivePrompt ?? DEFAULT_COMPLETE_ARCHIVE_PROMPT
 }
 
 /** How a task may run. */

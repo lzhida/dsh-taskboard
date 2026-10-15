@@ -621,6 +621,135 @@ describe('taskboard routes', () => {
     expect(archivedSessionsHistory).toEqual(['session-archive-me-456'])
   })
 
+  it('move {status:"done", thenArchive:true} chains done → archived atomically; sessions archive on the second hop', async () => {
+    // 0.9.x "archive on ✓ Done": a single request must perform both moves.
+    archivedSessionsHistory.length = 0
+    const created = await post('/dsh-taskboard/tasks', { title: '一键完成并归档', workspaceId: 'ws-a', urgency: 'normal' })
+    const id = created.json.value.id as string
+    // Drive the task into in_review with an associated execution session.
+    await store.mutate('execution-recorded', ledger => {
+      const target = ledger.tasks.find(t => t.id === id)!
+      target.status = 'in_review'
+      target.version += 1
+      target.executions.push({
+        id: 'e-chain-1', trigger: 'manual', startedAt: 100, outcome: 'succeeded', sessionId: 'session-chain-1',
+      })
+      return [target]
+    })
+    const before = store.get(id)!
+    expect(before.status).toBe('in_review')
+    expect(before.version).toBe(2)
+    // One request: ✓ Done + thenArchive, archiveSessions on the same call.
+    const res = await post(`/dsh-taskboard/tasks/${id}/move`, {
+      status: 'done',
+      ifVersion: before.version,
+      thenArchive: true,
+      archiveSessions: true,
+    })
+    expect(res.status).toBe(200)
+    expect(res.json.value.status).toBe('archived')
+    // The two moves are atomic: version jumped by exactly 2 (one per mutation).
+    const after = store.get(id)!
+    expect(after.status).toBe('archived')
+    expect(after.version).toBe(before.version + 2)
+    // The session archive was triggered and recorded in the response.
+    expect(res.json.value.sessionArchive).toEqual({ archived: ['session-chain-1'], failed: [], unsupported: [] })
+    expect(archivedSessionsHistory).toEqual(['session-chain-1'])
+  })
+
+  it('move {status:"done", thenArchive:true} without archiveSessions lands the task in archived without touching sessions', async () => {
+    archivedSessionsHistory.length = 0
+    const created = await post('/dsh-taskboard/tasks', { title: '完成并归档卡片', workspaceId: 'ws-a', urgency: 'normal' })
+    const id = created.json.value.id as string
+    await store.mutate('execution-recorded', ledger => {
+      const target = ledger.tasks.find(t => t.id === id)!
+      target.status = 'in_review'
+      target.version += 1
+      target.executions.push({
+        id: 'e-chain-2', trigger: 'manual', startedAt: 100, outcome: 'succeeded', sessionId: 'session-chain-2',
+      })
+      return [target]
+    })
+    const before = store.get(id)!
+    const res = await post(`/dsh-taskboard/tasks/${id}/move`, {
+      status: 'done',
+      ifVersion: before.version,
+      thenArchive: true,
+      archiveSessions: false,
+    })
+    expect(res.status).toBe(200)
+    expect(res.json.value.status).toBe('archived')
+    // sessionArchive is omitted when archiveSessions: false was sent.
+    expect(res.json.value.sessionArchive).toBeUndefined()
+    expect(archivedSessionsHistory).toEqual([])
+  })
+
+  it('move {status:"done", thenArchive:true} on a host without archiveSession still archives the card; sessionArchive reports unsupported', async () => {
+    const saved = workspaces.archiveSession
+    workspaces.archiveSession = undefined
+    try {
+      const created = await post('/dsh-taskboard/tasks', { title: '宿主不支持会话归档', workspaceId: 'ws-a', urgency: 'normal' })
+      const id = created.json.value.id as string
+      await store.mutate('execution-recorded', ledger => {
+        const target = ledger.tasks.find(t => t.id === id)!
+        target.status = 'in_review'
+        target.version += 1
+        target.executions.push({
+          id: 'e-chain-3', trigger: 'manual', startedAt: 100, outcome: 'succeeded', sessionId: 'session-chain-3',
+        })
+        return [target]
+      })
+      const before = store.get(id)!
+      const res = await post(`/dsh-taskboard/tasks/${id}/move`, {
+        status: 'done',
+        ifVersion: before.version,
+        thenArchive: true,
+        archiveSessions: true,
+      })
+      expect(res.status).toBe(200)
+      expect(res.json.value.status).toBe('archived')
+      // The chain still archives the card; sessionArchive reports the
+      // session as unsupported because the host has no capability.
+      expect(res.json.value.sessionArchive).toEqual({ archived: [], failed: [], unsupported: ['session-chain-3'] })
+    } finally { workspaces.archiveSession = saved }
+  })
+
+  it('move {status:"done", thenArchive:true} is rejected when the first transition is illegal', async () => {
+    // The thenArchive chain never gets to run if the first move is rejected
+    // (here: todo → done is illegal). The host returns the same invalid_transition
+    // a regular move would.
+    const created = await post('/dsh-taskboard/tasks', { title: '不可一次到完成', workspaceId: 'ws-a', urgency: 'normal' })
+    const id = created.json.value.id as string
+    const before = store.get(id)!
+    expect(before.status).toBe('todo')
+    const res = await post(`/dsh-taskboard/tasks/${id}/move`, {
+      status: 'done',
+      ifVersion: before.version,
+      thenArchive: true,
+    })
+    expect(res.status).toBe(400)
+    expect(res.json.error.code).toBe('invalid_transition')
+    expect(store.get(id)!.status).toBe('todo')
+  })
+
+  it('thenArchive:true is ignored when status is not done (no chain)', async () => {
+    // The chain only applies to done; for any other status the field is a no-op
+    // and the move behaves identically to a plain `move` call.
+    const created = await post('/dsh-taskboard/tasks', { title: '链只对done生效', workspaceId: 'ws-a', urgency: 'normal' })
+    const id = created.json.value.id as string
+    const before = store.get(id)!
+    const res = await post(`/dsh-taskboard/tasks/${id}/move`, {
+      status: 'in_progress',
+      ifVersion: before.version,
+      thenArchive: true,
+      archiveSessions: true,
+    })
+    expect(res.status).toBe(200)
+    expect(res.json.value.status).toBe('in_progress')
+    expect(res.json.value.sessionArchive).toBeUndefined()
+    expect(store.get(id)!.version).toBe(before.version + 1)
+  })
+
   it('POST /tasks rejects non-initial statuses (backlog/todo only)', async () => {
     const bad = await post('/dsh-taskboard/tasks', { title: '不能直接进行中', workspaceId: 'ws-a', urgency: 'normal', status: 'in_progress' })
     expect(bad.status).toBe(400)

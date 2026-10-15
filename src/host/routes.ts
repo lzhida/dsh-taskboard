@@ -867,6 +867,11 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
             const ifVersion = num(body, 'ifVersion')
             const status = str(body, 'status') ?? ''
             const archiveSessions = body.archiveSessions === true
+            // GUI-only chain: ✓ Done → also archive in one call. Only valid
+            // for `done`; the second move is `done → archived` (a legal
+            // transition). Reuses the user's ifVersion chain via two back-to-back
+            // mutations so a stale second request cannot race.
+            const thenArchive = body.thenArchive === true && status === 'done'
             if (ifVersion === undefined || ifVersion === null) throw new Error('Error: version_conflict: ifVersion required')
             const to = asStatus(status)
             let next: TaskRecord | undefined
@@ -887,7 +892,29 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
               ledger.tasks[index] = next
               return [next]
             })
-            const sessionArchive = to === 'archived' && archiveSessions
+            // Chain: ✓ Done → 立即归档 (0.9.x 看板设置联动). Run a second
+            // mutation so the version bumps atomically and the SSE stream
+            // sees one logical chain rather than a stale-client race.
+            if (thenArchive && next !== undefined) {
+              await store.mutate('task-moved', ledger => {
+                const { index, task } = liveTaskAt(ledger, id)
+                if (!canTransition(task.status, 'archived')) {
+                  // Race: the first move bumped version; an in-between writer
+                  // already moved the task somewhere else. Surface that as
+                  // a no-op so the user's "Done" still succeeded.
+                  return []
+                }
+                task.status = 'archived'
+                task.version += 1
+                task.updatedAt = options.now()
+                task.updatedBy = { kind: 'user' }
+                syncClaim(task, 'archived', options.now())
+                ledger.tasks[index] = task
+                next = task
+                return [task]
+              })
+            }
+            const sessionArchive = (to === 'archived' || thenArchive) && archiveSessions
               ? await archiveTaskSessions(beforeTask ?? next!, workspaces.archiveSession)
               : undefined
             json(res, { ok: true, value: { ...summarize(next!), ...(sessionArchive !== undefined ? { sessionArchive } : {}) } })
